@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import Book from "./Book";
+import Home from "./Home";
 import MemoryGallery from "./MemoryGallery";
+import Workdays from "./Workdays";
 
 function App() {
   const [authed, setAuthed] = useState(false);
-  const [view, setView] = useState("gallery"); // gallery | book
+  const [view, setView] = useState("home"); // home | gallery | book | workdays
+  const [section, setSection] = useState("All");
   const [pw, setPw] = useState("");
   const [shake, setShake] = useState(false);
   const [bookGateOpen, setBookGateOpen] = useState(false);
@@ -16,16 +19,18 @@ function App() {
     const t = window.setTimeout(() => {
       setAuthed(false);
       setPw("");
-      setView("gallery");
+      setView("home");
+      setSection("All");
       setBookGateOpen(false);
       setBookPin("");
-    }, 5 * 60 * 1000);
+    }, 30 * 60 * 1000);
     return () => window.clearTimeout(t);
   }, [authed]);
 
   const submit = () => {
     if (pw === "kanimuja") {
       setAuthed(true);
+      setView("home");
       return;
     }
     setPw("");
@@ -110,52 +115,86 @@ function App() {
     );
   }
 
+  // Keep the Book PIN gate above any view.
+  const bookGate = bookGateOpen ? (
+    <div style={styles.gateOverlay} onClick={closeBookGate}>
+      <div
+        style={{ ...styles.gateCard, ...(bookShake ? styles.shake : {}) }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={styles.gateTop}>
+          <span style={styles.gateTag}>#Book</span>
+          <button type="button" onClick={closeBookGate} style={styles.gateClose}>
+            ✕
+          </button>
+        </div>
+        <div style={styles.gateTitle}>Open the book</div>
+        <div style={styles.gateSub}>Enter the 4-digit pin</div>
+        <input
+          value={bookPin}
+          onChange={(e) => setBookPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submitBookPin();
+          }}
+          inputMode="numeric"
+          maxLength={4}
+          placeholder="••••"
+          style={styles.gateInput}
+          autoFocus
+        />
+        <button
+          type="button"
+          onClick={submitBookPin}
+          style={{ ...styles.gateBtn, opacity: bookPin.length === 4 ? 1 : 0.6 }}
+          disabled={bookPin.length !== 4}
+        >
+          Unlock
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   if (view === "book") {
-    return <Book onBack={() => setView("gallery")} />;
+    return (
+      <>
+        <Book onBack={() => setView("home")} />
+        {bookGate}
+      </>
+    );
+  }
+
+  if (view === "workdays") {
+    return <Workdays onBack={() => setView("home")} />;
+  }
+
+  if (view === "home") {
+    return (
+      <>
+        <Home
+          onOpenBook={openBookGate}
+          onOpenSection={(s) => {
+            if (s === "Workdaysss") {
+              setView("workdays");
+              return;
+            }
+            setSection(s);
+            setView("gallery");
+          }}
+        />
+        {bookGate}
+      </>
+    );
   }
 
   return (
     <>
-      <MemoryGallery onOpenBook={openBookGate} />
-      {bookGateOpen && (
-        <div style={styles.gateOverlay} onClick={closeBookGate}>
-          <div
-            style={{ ...styles.gateCard, ...(bookShake ? styles.shake : {}) }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={styles.gateTop}>
-              <span style={styles.gateTag}>#Book</span>
-              <button type="button" onClick={closeBookGate} style={styles.gateClose}>
-                ✕
-              </button>
-            </div>
-            <div style={styles.gateTitle}>Open the book</div>
-            <div style={styles.gateSub}>Enter the 4-digit pin</div>
-            <input
-              value={bookPin}
-              onChange={(e) =>
-                setBookPin(e.target.value.replace(/\D/g, "").slice(0, 4))
-              }
-              onKeyDown={(e) => {
-                if (e.key === "Enter") submitBookPin();
-              }}
-              inputMode="numeric"
-              maxLength={4}
-              placeholder="••••"
-              style={styles.gateInput}
-              autoFocus
-            />
-            <button
-              type="button"
-              onClick={submitBookPin}
-              style={{ ...styles.gateBtn, opacity: bookPin.length === 4 ? 1 : 0.6 }}
-              disabled={bookPin.length !== 4}
-            >
-              Unlock
-            </button>
-          </div>
-        </div>
-      )}
+      <MemoryGallery
+        onOpenBook={openBookGate}
+        activeTag={section}
+        onActiveTagChange={(t) => setSection(t)}
+        onGoHome={() => setView("home")}
+      />
+      {bookGate}
     </>
   );
 }

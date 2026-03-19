@@ -127,22 +127,39 @@ const tagColors = {
   Book: "#f5c97a",
 };
 
-export default function MemoryGallery({ onOpenBook }) {
-  const [memoryList, setMemoryList] = useState(() => seedMemories);
-  const [active, setActive] = useState("All");
+export default function MemoryGallery({
+  onOpenBook,
+  activeTag,
+  onActiveTagChange,
+  onGoHome,
+}) {
+  const [memoryList, setMemoryList] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem("memora_memory_list_v2");
+      if (!raw) return seedMemories;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : seedMemories;
+    } catch {
+      return seedMemories;
+    }
+  });
+  const [active, setActive] = useState(activeTag || "All");
   const [selected, setSelected] = useState(null);
   const [visible, setVisible] = useState(() => new Set());
   const [headerVisible, setHeaderVisible] = useState(false);
   const cardRefs = useRef({});
   const starsCanvasRef = useRef(null);
+  const [mediaIndexById, setMediaIndexById] = useState(() => ({}));
   const [addOpen, setAddOpen] = useState(false);
+  const [addTargetId, setAddTargetId] = useState(null); // append media into this memory when set
   const [addTag, setAddTag] = useState("Adventure");
-  const [addType, setAddType] = useState("image"); // image | video | text
+  const [addType, setAddType] = useState("media"); // media | text
   const [addTitle, setAddTitle] = useState("");
   const [addDate, setAddDate] = useState("");
   const [addNote, setAddNote] = useState("");
-  const [addFileUrl, setAddFileUrl] = useState("");
-  const addFileUrlRef = useRef("");
+  const [addMediaPaths, setAddMediaPaths] = useState(""); // newline or comma-separated /memories/...
+  const [addCount, setAddCount] = useState(1);
+  const [addCountTouched, setAddCountTouched] = useState(false);
   const [addSpan, setAddSpan] = useState("normal"); // normal | tall | wide
   const [addColor, setAddColor] = useState(tagColors.Love);
   const addTagOptions = useMemo(
@@ -159,6 +176,10 @@ export default function MemoryGallery({ onOpenBook }) {
     const t = setTimeout(() => setHeaderVisible(true), 100);
     return () => clearTimeout(t);
   }, []);
+
+  useEffect(() => {
+    if (activeTag && activeTag !== active) setActive(activeTag);
+  }, [activeTag, active]);
 
   useEffect(() => {
     const canvas = starsCanvasRef.current;
@@ -327,25 +348,61 @@ export default function MemoryGallery({ onOpenBook }) {
   };
 
   const openAddForTag = (t) => {
+    setAddTargetId(null);
     setAddTag(t);
-    setAddType("image");
+    setAddType(t === "Thoughts" ? "text" : "media");
     setAddTitle("");
     setAddDate("");
     setAddNote("");
-    if (addFileUrlRef.current) URL.revokeObjectURL(addFileUrlRef.current);
-    addFileUrlRef.current = "";
-    setAddFileUrl("");
+    setAddMediaPaths("");
+    setAddCount(1);
+    setAddCountTouched(false);
     setAddSpan("normal");
     setAddColor(tagColors[t] || "#a78bfa");
     setAddOpen(true);
   };
 
   const closeAdd = () => {
-    if (addFileUrlRef.current) URL.revokeObjectURL(addFileUrlRef.current);
-    addFileUrlRef.current = "";
-    setAddFileUrl("");
+    setAddMediaPaths("");
     setAddOpen(false);
+    setAddTargetId(null);
+    setAddCountTouched(false);
   };
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("memora_memory_list_v2", JSON.stringify(memoryList));
+    } catch {
+      // ignore
+    }
+  }, [memoryList]);
+
+  const parseMediaPaths = (raw) => {
+    const parts = raw
+      .replaceAll("@src/media/photos/", "/media/photos/")
+      .replaceAll("@src/media/videos/", "/media/videos/")
+      .split(/[\n,]/g)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const inferKind = (p) => {
+      const lower = p.toLowerCase();
+      if (lower.endsWith(".mp4") || lower.endsWith(".webm") || lower.endsWith(".mov")) return "video";
+      return "image";
+    };
+
+    return parts.map((p) => ({ kind: inferKind(p), src: p }));
+  };
+
+  // If user pasted multiple paths but didn't change Count,
+  // auto-sync Count to the number of paths.
+  useEffect(() => {
+    if (!addOpen) return;
+    if (addType !== "media") return;
+    if (addCountTouched) return;
+    const n = parseMediaPaths(addMediaPaths).length;
+    if (n > 0 && addCount !== n) setAddCount(n);
+  }, [addOpen, addType, addMediaPaths, addCountTouched, addCount]);
 
   const submitAdd = () => {
     const base = {
@@ -359,22 +416,121 @@ export default function MemoryGallery({ onOpenBook }) {
 
     const type = addType;
     if (type === "text") {
+      if (addTag === "Thoughts" && !addColor) return;
       setMemoryList((list) => [
         ...list,
-        { ...base, type: "text", color: addColor || (tagColors[addTag] ?? "#a78bfa") },
+        {
+          ...base,
+          type: "text",
+          color:
+            addTag === "Thoughts"
+              ? addColor
+              : addColor || (tagColors[addTag] ?? "#a78bfa"),
+        },
       ]);
       setAddOpen(false);
       return;
     }
+    if (addTag === "Thoughts") return;
 
-    if (!addFileUrl) return;
+    const uploads = parseMediaPaths(addMediaPaths);
+    if (!uploads.length) return;
+    if (uploads.length < addCount) return;
+    const slice = uploads.slice(0, addCount);
 
+    // Append into existing card (same caption/title stays).
+    if (addTargetId) {
+      setMemoryList((list) =>
+        list.map((m) => {
+          if (String(m.id) !== addTargetId) return m;
+          const existing = getMedia(m);
+          return {
+            ...m,
+            type: "media",
+            media: [...existing, ...slice],
+          };
+        })
+      );
+      setAddOpen(false);
+      setAddTargetId(null);
+      return;
+    }
+
+    // Create new card.
     setMemoryList((list) => [
       ...list,
-      { ...base, type, src: addFileUrl },
+      { ...base, type: "media", media: slice },
     ]);
     setAddOpen(false);
   };
+
+  const getMedia = (m) => {
+    if (m.type === "media" && Array.isArray(m.media) && m.media.length) return m.media;
+    if ((m.type === "image" || m.type === "video") && m.src) return [{ kind: m.type, src: m.src }];
+    return [];
+  };
+
+  const advanceMedia = (id, len) => {
+    if (!len || len <= 1) return;
+    setMediaIndexById((prev) => ({ ...prev, [id]: ((prev[id] ?? 0) + 1) % len }));
+  };
+
+  const setMediaIndex = (id, idx) => {
+    setMediaIndexById((prev) => ({ ...prev, [id]: idx }));
+  };
+
+  // Auto-advance for cards with multiple media (visible ones).
+  useEffect(() => {
+    const prefersReduced =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReduced) return undefined;
+
+    const ids = filtered
+      .map((m) => {
+        const media = getMedia(m);
+        if (media.length > 1 && visible.has(String(m.id))) return String(m.id);
+        return null;
+      })
+      .filter(Boolean);
+
+    if (!ids.length) return undefined;
+
+    const t = window.setInterval(() => {
+      for (const id of ids) {
+        const m = memoryList.find((x) => String(x.id) === id);
+        if (!m) continue;
+        const media = getMedia(m);
+        if (media.length <= 1) continue;
+        const idx = mediaIndexById[id] ?? 0;
+        const current = media[idx] || media[0];
+        // Only auto-advance on timer for images; videos advance on ended.
+        if (current?.kind === "image") advanceMedia(id, media.length);
+      }
+    }, 3000);
+
+    return () => window.clearInterval(t);
+  }, [filtered, memoryList, visible, mediaIndexById]);
+
+  // Auto-advance media inside the opened lightbox as well.
+  useEffect(() => {
+    if (!selected) return undefined;
+    const media = getMedia(selected);
+    if (media.length <= 1) return undefined;
+    const prefersReduced =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReduced) return undefined;
+
+    const id = String(selected.id);
+    const idx = mediaIndexById[id] ?? 0;
+    const current = media[idx] || media[0];
+    if (current?.kind !== "image") return undefined;
+    const t = window.setTimeout(() => advanceMedia(id, media.length), 3000);
+    return () => window.clearTimeout(t);
+  }, [selected, mediaIndexById]);
 
   return (
     <div style={styles.root}>
@@ -391,40 +547,21 @@ export default function MemoryGallery({ onOpenBook }) {
           transform: headerVisible ? "translateY(0)" : "translateY(-30px)",
         }}
       >
-        <div style={styles.logo}>
-          <span style={styles.logoIcon}>✦</span>
-          <span style={styles.logoText}>Memora</span>
+        <button
+          type="button"
+          style={styles.backBtn}
+          onClick={() => onGoHome && onGoHome()}
+          title="Back"
+        >
+          ← Back to explore
+        </button>
+
+        <div style={styles.chapterTitle}>
+          {active === "All" ? "All Memories" : active}
         </div>
       </header>
 
-      <div style={styles.filterBar}>
-        {tags.map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => {
-              if (t === "Book") {
-                if (onOpenBook) onOpenBook();
-                return;
-              }
-              setActive(t);
-            }}
-            style={{
-              ...styles.filterBtn,
-              background:
-                active === t
-                  ? tagColors[t] || "rgba(255,255,255,0.15)"
-                  : "rgba(255,255,255,0.05)",
-              color: active === t ? "#0a0a0f" : "rgba(255,255,255,0.6)",
-              fontWeight: active === t ? 700 : 400,
-              border: active === t ? "none" : "1px solid rgba(255,255,255,0.1)",
-              transform: active === t ? "scale(1.05)" : "scale(1)",
-            }}
-          >
-            {t === "All" ? "✦ All" : t}
-          </button>
-        ))}
-      </div>
+      {/* Chapters are selected from Home; no in-page chapter bar */}
 
       <div style={styles.grid}>
         {filtered.map((m, i) => (
@@ -452,32 +589,72 @@ export default function MemoryGallery({ onOpenBook }) {
               transitionDelay: `${(i % 4) * 80}ms`,
             }}
           >
-            {m.type === "image" && (
-              <>
-                <img src={m.src} alt={m.title} style={styles.cardImg} />
-                <div style={styles.imgOverlay} />
-              </>
-            )}
-            {m.type === "video" && (
-              <>
-                <video
-                  src={m.src}
-                  style={styles.cardImg}
-                  muted
-                  loop
-                  playsInline
-                  onMouseEnter={(e) => {
-                    e.currentTarget.play();
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.pause();
-                    e.currentTarget.currentTime = 0;
-                  }}
-                />
-                <div style={styles.imgOverlay} />
-                <div style={styles.playBadge}>▶</div>
-              </>
-            )}
+            {(() => {
+              const media = getMedia(m);
+              const idx = mediaIndexById[String(m.id)] ?? 0;
+              const current = media[idx] || media[0];
+              if (!current) return null;
+              const id = String(m.id);
+              return (
+                <>
+                  {current.kind === "image" ? (
+                    <img src={current.src} alt={m.title} style={styles.cardImg} />
+                  ) : (
+                    <>
+                      <video
+                        src={current.src}
+                        style={styles.cardImg}
+                        muted
+                        playsInline
+                        autoPlay
+                        onEnded={() => advanceMedia(id, media.length)}
+                      />
+                      <div style={styles.playBadge}>▶</div>
+                    </>
+                  )}
+                  <div style={styles.imgOverlay} />
+                  {media.length > 1 && (
+                    <div
+                      style={styles.dotRow}
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        advanceMedia(id, media.length);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.stopPropagation();
+                          advanceMedia(id, media.length);
+                        }
+                      }}
+                    >
+                      {media.map((_, di) => (
+                        <div
+                          key={`${id}-dot-${di}`}
+                          style={{
+                            ...styles.dot,
+                            ...(di === idx ? styles.dotActive : {}),
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMediaIndex(id, di);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.stopPropagation();
+                              setMediaIndex(id, di);
+                            }
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
             {m.type === "text" && (
               <div
                 style={{
@@ -530,16 +707,52 @@ export default function MemoryGallery({ onOpenBook }) {
               #{selected.tag}
             </span>
             <h2 style={styles.lbTitle}>{selected.title}</h2>
-            {selected.type === "image" && (
-              <img
-                src={selected.src}
-                alt={selected.title}
-                style={styles.lbMedia}
-              />
-            )}
-            {selected.type === "video" && (
-              <video src={selected.src} controls style={styles.lbMedia} />
-            )}
+            {(() => {
+              const media = getMedia(selected);
+              if (!media.length) return null;
+              const id = String(selected.id);
+              const idx = mediaIndexById[id] ?? 0;
+              const current = media[idx] || media[0];
+              return (
+                <div style={styles.lbMediaWrap}>
+                  {current.kind === "image" ? (
+                    <img src={current.src} alt={selected.title} style={styles.lbMedia} />
+                  ) : (
+                    <video
+                      src={current.src}
+                      controls
+                      style={styles.lbMedia}
+                      onEnded={() => advanceMedia(id, media.length)}
+                    />
+                  )}
+                  {media.length > 1 && (
+                    <div style={styles.lbDotRow}>
+                      {media.map((_, di) => (
+                        <div
+                          key={`${id}-lb-dot-${di}`}
+                          style={{
+                            ...styles.lbDot,
+                            ...(di === idx ? styles.lbDotActive : {}),
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMediaIndex(id, di);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.stopPropagation();
+                              setMediaIndex(id, di);
+                            }
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             {selected.type === "text" && (
               <div
                 style={{ ...styles.lbTextBox, borderColor: selected.color }}
@@ -556,6 +769,7 @@ export default function MemoryGallery({ onOpenBook }) {
             )}
             {selected.type !== "text" && <p style={styles.lbNote}>{selected.note}</p>}
             <p style={styles.lbDate}>{selected.date}</p>
+
           </div>
         </div>
       )}
@@ -585,27 +799,31 @@ export default function MemoryGallery({ onOpenBook }) {
               </button>
             </div>
 
-            <h3 style={styles.addTitle}>Add memory</h3>
+            <h3 style={styles.addTitle}>
+              {addTargetId ? "Add to this memory" : "Add memory"}
+            </h3>
 
-            <div style={styles.addRow}>
-              <label style={styles.addLabel}>Category</label>
-              <select
-                value={addTag}
-                onChange={(e) => setAddTag(e.target.value)}
-                style={styles.addSelect}
-              >
-                {addTagOptions.map((t) => (
-                  <option key={t} value={t} style={{ color: "#000" }}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {!addTargetId && (
+              <div style={styles.addRow}>
+                <label style={styles.addLabel}>Category</label>
+                <select
+                  value={addTag}
+                  onChange={(e) => setAddTag(e.target.value)}
+                  style={styles.addSelect}
+                >
+                  {addTagOptions.map((t) => (
+                    <option key={t} value={t} style={{ color: "#000" }}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div style={styles.addRow}>
               <label style={styles.addLabel}>Type</label>
               <div style={styles.addPills}>
-                {["image", "video", "text"].map((t) => (
+                {(addTag === "Thoughts" ? ["text"] : ["media", "text"]).map((t) => (
                   <button
                     key={t}
                     type="button"
@@ -645,35 +863,46 @@ export default function MemoryGallery({ onOpenBook }) {
               />
             </div>
 
-            {addType !== "text" && (
-              <div style={styles.addRow}>
-                <label style={styles.addLabel}>
-                  {addType === "image" ? "Upload image" : "Upload video"}
-                </label>
-                <input
-                  type="file"
-                  accept={addType === "image" ? "image/*" : "video/*"}
-                  onChange={(e) => {
-                    const f = e.target.files && e.target.files[0];
-                    if (!f) return;
-                    if (addFileUrlRef.current) URL.revokeObjectURL(addFileUrlRef.current);
-                    const url = URL.createObjectURL(f);
-                    addFileUrlRef.current = url;
-                    setAddFileUrl(url);
-                  }}
-                  style={styles.addInput}
-                />
-                {addFileUrl && (
+            {addType === "media" && (
+              <>
+                <div style={styles.addRow}>
+                  <label style={styles.addLabel}>Count</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={addCount}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      const safe = Number.isFinite(n) ? Math.max(1, Math.min(30, Math.floor(n))) : 1;
+                      setAddCount(safe);
+                      setAddCountTouched(true);
+                    }}
+                    style={styles.addInput}
+                    placeholder="1"
+                  />
+                </div>
+
+                <div style={styles.addRow}>
+                  <label style={styles.addLabel}>Paths</label>
+                  <textarea
+                    value={addMediaPaths}
+                    onChange={(e) => setAddMediaPaths(e.target.value)}
+                    style={styles.addTextarea}
+                    placeholder={"/memories/photo1.jpg\n/memories/video1.mp4\n/memories/photo2.png"}
+                  />
                   <div style={styles.uploadHint}>
-                    {addType === "image" ? "Image selected" : "Video selected"}
+                    Put files into `public/media/photos` or `public/media/videos` then paste paths here (comma or newline separated).
                   </div>
-                )}
-              </div>
+                </div>
+              </>
             )}
 
             {addType === "text" && (
               <div style={styles.addRow}>
-                <label style={styles.addLabel}>Accent</label>
+                <label style={styles.addLabel}>
+                  {addTag === "Thoughts" ? "Font color" : "Accent"}
+                </label>
                 <input
                   value={addColor}
                   onChange={(e) => setAddColor(e.target.value)}
@@ -716,7 +945,16 @@ export default function MemoryGallery({ onOpenBook }) {
               />
             </div>
 
-            <button type="button" onClick={submitAdd} style={styles.addSubmit}>
+            <button
+              type="button"
+              onClick={submitAdd}
+              disabled={addType === "media" && parseMediaPaths(addMediaPaths).length < addCount}
+              style={{
+                ...styles.addSubmit,
+                opacity:
+                  addType === "media" && parseMediaPaths(addMediaPaths).length < addCount ? 0.6 : 1,
+              }}
+            >
               Add
             </button>
           </div>
@@ -725,7 +963,7 @@ export default function MemoryGallery({ onOpenBook }) {
 
       <footer style={styles.footer}>
         <span style={styles.footerIcon}>✦</span>
-        <span>Made with love · Memora 2024</span>
+        <span>Made with love · Muja</span>
       </footer>
 
       <style>{`
@@ -814,51 +1052,46 @@ const styles = {
     left: "18px",
     zIndex: 200,
     transition: "all 0.9s cubic-bezier(0.16,1,0.3,1)",
-    display: "flex",
+    display: "grid",
+    gridTemplateColumns: "1fr auto 1fr",
     alignItems: "center",
-    justifyContent: "flex-start",
     padding: "10px 12px",
     borderRadius: "14px",
     background: "rgba(255,255,255,0.04)",
     border: "1px solid rgba(255,255,255,0.08)",
     backdropFilter: "blur(14px)",
+    width: "calc(100% - 36px)",
+    maxWidth: "1400px",
+    right: "18px",
+    margin: "0 auto",
   },
-  logo: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    gap: "12px",
-    marginBottom: 0,
-  },
-  logoIcon: { fontSize: "28px", color: "#f5c97a", animation: "none" },
-  logoText: {
-    fontFamily: "'Cormorant Garamond', serif",
-    fontSize: "24px",
-    fontWeight: 300,
-    letterSpacing: "0.12em",
-    background:
-      "linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.5) 100%)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-  },
-  filterBar: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "10px",
-    justifyContent: "center",
-    padding: "96px 20px 40px",
-    position: "relative",
-    zIndex: 1,
-  },
-  filterBtn: {
-    padding: "8px 18px",
-    borderRadius: "50px",
+  backBtn: {
+    justifySelf: "start",
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    color: "rgba(255,255,255,0.86)",
+    borderRadius: "999px",
+    padding: "10px 12px",
     cursor: "pointer",
-    fontSize: "12px",
-    letterSpacing: "0.06em",
-    transition: "all 0.25s ease",
     fontFamily: "'DM Mono', monospace",
-    WebkitTapHighlightColor: "transparent",
+    letterSpacing: "0.06em",
+    fontSize: "12px",
+    transition: "all 0.25s ease",
+    maxWidth: "240px",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  chapterTitle: {
+    justifySelf: "center",
+    fontFamily: "'Cormorant Garamond', serif",
+    fontWeight: 300,
+    letterSpacing: "0.06em",
+    fontSize: "clamp(18px, 2.6vw, 30px)",
+    color: "rgba(255,255,255,0.90)",
+    textShadow: "0 16px 60px rgba(0,0,0,0.65)",
+    padding: "0 10px",
+    textAlign: "center",
   },
   bottomAddBtn: {
     position: "fixed",
@@ -882,7 +1115,7 @@ const styles = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
     gap: "16px",
-    padding: "0 24px 80px",
+    padding: "92px 24px 80px",
     maxWidth: "1400px",
     margin: "0 auto",
     position: "relative",
@@ -1003,6 +1236,32 @@ const styles = {
     fontSize: "18px",
     zIndex: 2,
     border: "1px solid rgba(255,255,255,0.2)",
+  },
+  dotRow: {
+    position: "absolute",
+    left: "50%",
+    bottom: "14px",
+    transform: "translateX(-50%)",
+    zIndex: 3,
+    display: "flex",
+    gap: "6px",
+    padding: "6px 10px",
+    borderRadius: "999px",
+    background: "rgba(6,6,14,0.35)",
+    border: "1px solid rgba(255,255,255,0.10)",
+    backdropFilter: "blur(10px)",
+  },
+  dot: {
+    width: "6px",
+    height: "6px",
+    borderRadius: "50%",
+    background: "rgba(255,255,255,0.35)",
+    transform: "scale(1)",
+    transition: "all 0.35s cubic-bezier(0.16,1,0.3,1)",
+  },
+  dotActive: {
+    background: "rgba(255,255,255,0.92)",
+    transform: "scale(1.35)",
   },
   lightbox: {
     position: "fixed",
@@ -1199,6 +1458,52 @@ const styles = {
     marginBottom: "20px",
     maxHeight: "460px",
     objectFit: "cover",
+  },
+  lbMediaWrap: {
+    position: "relative",
+  },
+  lbDotRow: {
+    position: "absolute",
+    left: "50%",
+    bottom: "12px",
+    transform: "translateX(-50%)",
+    zIndex: 2,
+    display: "flex",
+    gap: "8px",
+    padding: "7px 12px",
+    borderRadius: "999px",
+    background: "rgba(6,6,14,0.35)",
+    border: "1px solid rgba(255,255,255,0.10)",
+    backdropFilter: "blur(10px)",
+  },
+  lbDot: {
+    width: "8px",
+    height: "8px",
+    borderRadius: "50%",
+    background: "rgba(255,255,255,0.35)",
+    transition: "all 0.35s cubic-bezier(0.16,1,0.3,1)",
+  },
+  lbDotActive: {
+    background: "rgba(255,255,255,0.92)",
+    boxShadow: "0 0 0 7px rgba(255,255,255,0.08)",
+    transform: "scale(1.2)",
+  },
+  lbAddBtn: {
+    position: "sticky",
+    left: 0,
+    right: 0,
+    bottom: "-10px",
+    marginTop: "18px",
+    width: "100%",
+    padding: "12px 14px",
+    borderRadius: "16px",
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.08)",
+    color: "#fff",
+    cursor: "pointer",
+    fontFamily: "'DM Mono', monospace",
+    letterSpacing: "0.08em",
+    backdropFilter: "blur(14px)",
   },
   lbNote: {
     fontFamily: "'Cormorant Garamond', serif",
