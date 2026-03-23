@@ -4,16 +4,16 @@ export default function Workdays({ onBack }) {
   const [p, setP] = useState(0);
 
   useEffect(() => {
-    const t = window.setInterval(() => setP((x) => Math.min(100, x + 1)), 22);
+    // Loop the loading so it doesn't claim completion when there are no memories yet.
+    const t = window.setInterval(() => setP((x) => (x >= 72 ? 0 : x + 1)), 18);
     return () => window.clearInterval(t);
   }, []);
 
   const label = useMemo(() => {
-    if (p < 18) return "gathering notes";
-    if (p < 42) return "warming lights";
-    if (p < 72) return "aligning moments";
-    if (p < 95) return "almost there";
-    return "ready";
+    if (p < 18) return "waiting for workdays";
+    if (p < 40) return "tuning the lights";
+    if (p < 60) return "arranging pages";
+    return "almost ready";
   }, [p]);
 
   return (

@@ -1,0 +1,36 @@
+[
+    {
+      "id": 1,
+      "tag": "Love",
+      "title": "possesive girl",
+      "date": "2nd sem",
+      "note": "You were jealous, angry, possessive… but in every emotion, I saw how deeply you loved me.I never forgot those video call nights with you!",
+      "span": "tall",
+      "type": "media",
+      "media": [
+        {
+          "kind": "image",
+          "src": "media\\photos\\one.jpeg"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "tag": "Love",
+      "title": "love",
+      "date": "sept24",
+      "note": "Mayakite dii… anaiku enna kanula mai potu\nthat was the moment I fell for you.",
+      "span": "normal",
+      "type": "media",
+      "media": [
+        {
+          "kind": "image",
+          "src": "/media/photos/w1.jpeg"
+        },
+        {
+          "kind": "image",
+          "src": "/media/photos/w2.jpeg"
+        }
+      ]
+    }
+  ]

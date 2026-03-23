@@ -1,110 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const seedMemories = [
-  {
-    id: 1,
-    type: "image",
-    tag: "Adventure",
-    src: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&q=80",
-    title: "Mountain Escape",
-    date: "March 2024",
-    note: "That sunrise we'll never forget 🌄",
-    span: "tall",
-  },
-  {
-    id: 2,
-    type: "text",
-    tag: "Thoughts",
-    title: "A note to us",
-    note:
-      '"Some memories are so perfect you\'re afraid to revisit them — afraid they won\'t be as beautiful as they felt. But they always are."',
-    date: "Jan 2024",
-    span: "normal",
-    color: "#f5c97a",
-  },
-  {
-    id: 3,
-    type: "image",
-    tag: "Coimbatore Days",
-    src: "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=600&q=80",
-    title: "Golden Hour",
-    date: "Feb 2024",
-    note: "Light like this only exists in dreams",
-    span: "wide",
-  },
-  {
-    id: 4,
-    type: "video",
-    tag: "School Days",
-    src: "https://www.w3schools.com/html/mov_bbb.mp4",
-    title: "That Silly Evening",
-    date: "Dec 2023",
-    note: "We laughed so hard 😂",
-    span: "normal",
-  },
-  {
-    id: 5,
-    type: "image",
-    tag: "Chennai Days",
-    src: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=600&q=80",
-    title: "The Road Trip",
-    date: "Nov 2023",
-    note: "Miles of music and madness",
-    span: "normal",
-  },
-  {
-    id: 6,
-    type: "text",
-    tag: "Love",
-    title: "Favourite things",
-    note:
-      "☕ Coffee before noon\n🎵 Playlists at midnight\n📸 Candid shots\n🌧️ Rainy windows\n🍕 Late night slices",
-    date: "Oct 2023",
-    span: "normal",
-    color: "#a78bfa",
-  },
-  {
-    id: 7,
-    type: "image",
-    tag: "Adventure",
-    src: "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=600&q=80",
-    title: "Lake at Dusk",
-    date: "Sep 2023",
-    note: "Still waters, loud hearts",
-    span: "tall",
-  },
-  {
-    id: 8,
-    type: "image",
-    tag: "Coimbatore Days",
-    src: "https://images.unsplash.com/photo-1518020382113-a7e8fc38eac9?w=600&q=80",
-    title: "City Lights",
-    date: "Aug 2023",
-    note: "The city never sleeps, neither did we",
-    span: "wide",
-  },
-  {
-    id: 9,
-    type: "text",
-    tag: "Thoughts",
-    title: "What I remember most",
-    note:
-      "Not the places. Not the photos. The feeling of being exactly where I was supposed to be.",
-    date: "Jul 2023",
-    span: "normal",
-    color: "#f87171",
-  },
-  {
-    id: 10,
-    type: "image",
-    tag: "Chennai Days",
-    src: "https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=600&q=80",
-    title: "Forest Walk",
-    date: "Jun 2023",
-    note: "Getting lost on purpose",
-    span: "normal",
-  },
-];
+const seedMemories = [];
 
 const tags = [
   "All",
@@ -127,6 +23,17 @@ const tagColors = {
   Book: "#f5c97a",
 };
 
+// For now: hide these chapters' memories (requested).
+const REMOVE_TAGS = new Set(["Coimbatore Days"]);
+
+const normalizeMemoryList = (list) => {
+  if (!Array.isArray(list)) return [];
+  return list.filter((m) => {
+    const tag = (m?.tag ?? "").toString().trim();
+    return !REMOVE_TAGS.has(tag);
+  });
+};
+
 export default function MemoryGallery({
   onOpenBook,
   activeTag,
@@ -135,12 +42,13 @@ export default function MemoryGallery({
 }) {
   const [memoryList, setMemoryList] = useState(() => {
     try {
-      const raw = window.localStorage.getItem("memora_memory_list_v2");
+      const raw = window.localStorage.getItem("memora_memory_list_v3");
       if (!raw) return seedMemories;
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : seedMemories;
+      const arr = Array.isArray(parsed) ? parsed : seedMemories;
+      return normalizeMemoryList(arr);
     } catch {
-      return seedMemories;
+      return normalizeMemoryList(seedMemories);
     }
   });
   const [active, setActive] = useState(activeTag || "All");
@@ -150,6 +58,7 @@ export default function MemoryGallery({
   const cardRefs = useRef({});
   const starsCanvasRef = useRef(null);
   const [mediaIndexById, setMediaIndexById] = useState(() => ({}));
+  const lightboxVideoRef = useRef(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addTargetId, setAddTargetId] = useState(null); // append media into this memory when set
   const [addTag, setAddTag] = useState("Adventure");
@@ -163,7 +72,7 @@ export default function MemoryGallery({
   const [addSpan, setAddSpan] = useState("normal"); // normal | tall | wide
   const [addColor, setAddColor] = useState(tagColors.Love);
   const addTagOptions = useMemo(
-    () => tags.filter((t) => t !== "All" && t !== "Book"),
+    () => tags.filter((t) => t !== "All" && t !== "Book" && !REMOVE_TAGS.has(t)),
     []
   );
 
@@ -175,6 +84,34 @@ export default function MemoryGallery({
   useEffect(() => {
     const t = setTimeout(() => setHeaderVisible(true), 100);
     return () => clearTimeout(t);
+  }, []);
+
+  // Load repo-persisted memories (works on Vercel).
+  // If `public/memories/memory_list.json` is empty, we keep localStorage.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/memories/memory_list.json", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        if (Array.isArray(data) && data.length > 0) {
+          const normalized = normalizeMemoryList(data);
+          setMemoryList(normalized);
+          try {
+            window.localStorage.setItem("memora_memory_list_v3", JSON.stringify(normalized));
+          } catch {
+            // ignore
+          }
+        }
+      } catch {
+        // ignore (file missing/invalid)
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -347,7 +284,22 @@ export default function MemoryGallery({
     setSelected(m);
   };
 
+  const downloadMemoryList = () => {
+    // Downloads the current memories so you can paste them into `public/memories/memory_list.json`.
+    const payload = JSON.stringify(memoryList, null, 2);
+    const blob = new Blob([payload], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "memory_list.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const openAddForTag = (t) => {
+    if (REMOVE_TAGS.has(t)) return;
     setAddTargetId(null);
     setAddTag(t);
     setAddType(t === "Thoughts" ? "text" : "media");
@@ -371,7 +323,7 @@ export default function MemoryGallery({
 
   useEffect(() => {
     try {
-      window.localStorage.setItem("memora_memory_list_v2", JSON.stringify(memoryList));
+      window.localStorage.setItem("memora_memory_list_v3", JSON.stringify(memoryList));
     } catch {
       // ignore
     }
@@ -405,6 +357,7 @@ export default function MemoryGallery({
   }, [addOpen, addType, addMediaPaths, addCountTouched, addCount]);
 
   const submitAdd = () => {
+    if (REMOVE_TAGS.has(addTag)) return;
     const base = {
       id: nextId,
       tag: addTag,
@@ -481,6 +434,8 @@ export default function MemoryGallery({
 
   // Auto-advance for cards with multiple media (visible ones).
   useEffect(() => {
+    // Prevent conflicts with the lightbox slideshow.
+    if (selected) return undefined;
     const prefersReduced =
       typeof window !== "undefined" &&
       window.matchMedia &&
@@ -511,7 +466,7 @@ export default function MemoryGallery({
     }, 3000);
 
     return () => window.clearInterval(t);
-  }, [filtered, memoryList, visible, mediaIndexById]);
+  }, [filtered, memoryList, visible, mediaIndexById, selected]);
 
   // Auto-advance media inside the opened lightbox as well.
   useEffect(() => {
@@ -602,11 +557,13 @@ export default function MemoryGallery({
                   ) : (
                     <>
                       <video
+                        key={current.src}
                         src={current.src}
                         style={styles.cardImg}
                         muted
                         playsInline
                         autoPlay
+                        preload="metadata"
                         onEnded={() => advanceMedia(id, media.length)}
                       />
                       <div style={styles.playBadge}>▶</div>
@@ -719,10 +676,26 @@ export default function MemoryGallery({
                     <img src={current.src} alt={selected.title} style={styles.lbMedia} />
                   ) : (
                     <video
+                      key={current.src}
+                      ref={lightboxVideoRef}
                       src={current.src}
                       controls
+                      muted
+                      playsInline
+                      autoPlay
                       style={styles.lbMedia}
+                      preload="metadata"
                       onEnded={() => advanceMedia(id, media.length)}
+                      onLoadedMetadata={(e) => {
+                        const v = e.currentTarget;
+                        try {
+                          v.currentTime = 0;
+                          // Autoplay is allowed because it's muted.
+                          v.play().catch(() => {});
+                        } catch {
+                          // ignore
+                        }
+                      }}
                     />
                   )}
                   {media.length > 1 && (
@@ -774,7 +747,7 @@ export default function MemoryGallery({
         </div>
       )}
 
-      {active !== "Book" && (
+      {active !== "Book" && !REMOVE_TAGS.has(active) && !selected && (
         <button
           type="button"
           onClick={() => openAddForTag(active === "All" ? "Adventure" : active)}
@@ -784,6 +757,12 @@ export default function MemoryGallery({
           }}
         >
           ＋ Add
+        </button>
+      )}
+
+      {!addOpen && (
+        <button type="button" onClick={downloadMemoryList} style={styles.exportBtn}>
+          Export memories
         </button>
       )}
 
@@ -1111,6 +1090,23 @@ const styles = {
     letterSpacing: "0.06em",
     fontSize: "12px",
   },
+  exportBtn: {
+    position: "fixed",
+    right: "18px",
+    bottom: "22px",
+    zIndex: 121,
+    padding: "12px 14px",
+    borderRadius: "999px",
+    cursor: "pointer",
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    backdropFilter: "blur(14px)",
+    color: "rgba(255,255,255,0.92)",
+    transition: "all 0.25s ease",
+    fontFamily: "'DM Mono', monospace",
+    letterSpacing: "0.06em",
+    fontSize: "12px",
+  },
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
@@ -1269,17 +1265,17 @@ const styles = {
     background: "rgba(6,6,14,0.9)",
     backdropFilter: "blur(20px)",
     display: "flex",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "center",
     zIndex: 100,
-    padding: "20px",
+    padding: "80px 20px 20px",
     animation: "fadeIn 0.25s ease",
   },
   lightboxInner: {
     background: "rgba(255,255,255,0.04)",
     border: "1px solid rgba(255,255,255,0.1)",
     borderRadius: "20px",
-    padding: "40px",
+    padding: "36px",
     maxWidth: "720px",
     width: "100%",
     position: "relative",
@@ -1438,6 +1434,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    zIndex: 10,
   },
   lbTag: {
     fontSize: "11px",
@@ -1456,11 +1453,15 @@ const styles = {
     width: "100%",
     borderRadius: "12px",
     marginBottom: "20px",
-    maxHeight: "460px",
-    objectFit: "cover",
+    maxHeight: "70vh",
+    objectFit: "contain",
+    background: "rgba(0,0,0,0.25)",
+    display: "block",
   },
   lbMediaWrap: {
     position: "relative",
+    width: "100%",
+    marginBottom: "14px",
   },
   lbDotRow: {
     position: "absolute",
