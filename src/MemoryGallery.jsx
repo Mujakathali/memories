@@ -26,8 +26,7 @@ const tagColors = {
   Book: "#f5c97a",
 };
 
-// For now: hide these chapters' memories (requested).
-const REMOVE_TAGS = new Set(["Coimbatore Days"]);
+const REMOVE_TAGS = new Set();
 
 const normalizeMemoryList = (list) => {
   if (!Array.isArray(list)) return [];
@@ -337,7 +336,29 @@ export default function MemoryGallery({
 
   const downloadMemoryList = () => {
     // Downloads the current memories so you can paste them into `public/memories/memory_list.json`.
-    const payload = JSON.stringify(memoryList, null, 2);
+    const normalizeSrc = (src) => {
+      const s = String(src || "").trim().replaceAll("\\\\", "/");
+      if (!s) return s;
+      if (s.startsWith("http://") || s.startsWith("https://") || s.startsWith("data:")) return s;
+      if (s.startsWith("/")) return s;
+      return `/${s}`;
+    };
+
+    const payloadList = (memoryList || []).map((m) => {
+      if (!m) return m;
+      if (Array.isArray(m.media)) {
+        return {
+          ...m,
+          media: m.media.map((x) => ({ ...x, src: normalizeSrc(x?.src) })),
+        };
+      }
+      if ((m.type === "image" || m.type === "video") && m.src) {
+        return { ...m, src: normalizeSrc(m.src) };
+      }
+      return m;
+    });
+
+    const payload = JSON.stringify(payloadList, null, 2);
     const blob = new Blob([payload], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -389,13 +410,21 @@ export default function MemoryGallery({
       .map((s) => s.trim())
       .filter(Boolean);
 
+    const normalizeSrc = (src) => {
+      const s = String(src || "").trim().replaceAll("\\\\", "/");
+      if (!s) return s;
+      if (s.startsWith("http://") || s.startsWith("https://") || s.startsWith("data:")) return s;
+      if (s.startsWith("/")) return s;
+      return `/${s}`;
+    };
+
     const inferKind = (p) => {
       const lower = p.toLowerCase();
       if (lower.endsWith(".mp4") || lower.endsWith(".webm") || lower.endsWith(".mov")) return "video";
       return "image";
     };
 
-    return parts.map((p) => ({ kind: inferKind(p), src: p }));
+    return parts.map((p) => ({ kind: inferKind(p), src: normalizeSrc(p) }));
   };
 
   // If user pasted multiple paths but didn't change Count,
@@ -1631,4 +1660,3 @@ const styles = {
   },
   footerIcon: { color: "#f5c97a" },
 };
-
