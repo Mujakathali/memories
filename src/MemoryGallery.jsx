@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 const seedMemories = [];
 
+const MEMORY_LIST_KEY = "memora_memory_list_v3";
+const DELETED_IDS_KEY = "memora_deleted_ids_v1";
+
 const tags = [
   "All",
   "Adventure",
@@ -34,21 +37,42 @@ const normalizeMemoryList = (list) => {
   });
 };
 
+const readDeletedIds = () => {
+  try {
+    const raw = window.localStorage.getItem(DELETED_IDS_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.map((x) => String(x)));
+  } catch {
+    return new Set();
+  }
+};
+
+const filterDeleted = (list, deletedIds) => {
+  if (!Array.isArray(list) || !deletedIds || deletedIds.size === 0) return list;
+  return list.filter((m) => !deletedIds.has(String(m?.id ?? "")));
+};
+
 export default function MemoryGallery({
   onOpenBook,
   activeTag,
   onActiveTagChange,
   onGoHome,
 }) {
+  const [deletedIds, setDeletedIds] = useState(() => {
+    if (typeof window === "undefined") return new Set();
+    return readDeletedIds();
+  });
   const [memoryList, setMemoryList] = useState(() => {
     try {
-      const raw = window.localStorage.getItem("memora_memory_list_v3");
+      const raw = window.localStorage.getItem(MEMORY_LIST_KEY);
       if (!raw) return seedMemories;
       const parsed = JSON.parse(raw);
       const arr = Array.isArray(parsed) ? parsed : seedMemories;
-      return normalizeMemoryList(arr);
+      return filterDeleted(normalizeMemoryList(arr), readDeletedIds());
     } catch {
-      return normalizeMemoryList(seedMemories);
+      return filterDeleted(normalizeMemoryList(seedMemories), readDeletedIds());
     }
   });
   const [active, setActive] = useState(activeTag || "All");
@@ -97,15 +121,17 @@ export default function MemoryGallery({
         const data = await res.json();
         if (cancelled) return;
         if (Array.isArray(data)) {
-          const normalized = normalizeMemoryList(data);
-          // Always overwrite app state when the repo file loads successfully,
-          // so a new Vercel deploy doesn't get stuck on old localStorage data.
-          setMemoryList(normalized);
-          try {
-            window.localStorage.setItem("memora_memory_list_v3", JSON.stringify(normalized));
-          } catch {
-            // ignore
-          }
+          const deletedNow = readDeletedIds();
+          const normalized = filterDeleted(normalizeMemoryList(data), deletedNow);
+          setMemoryList((current) => {
+            const hasLocal = Array.isArray(current) && current.length > 0;
+            if (!hasLocal) return normalized;
+
+            const byId = new Map();
+            for (const m of normalized) byId.set(String(m?.id ?? ""), m);
+            for (const m of current) byId.set(String(m?.id ?? ""), m);
+            return filterDeleted(normalizeMemoryList(Array.from(byId.values())), deletedNow);
+          });
         }
       } catch {
         // ignore (file missing/invalid)
@@ -286,6 +312,29 @@ export default function MemoryGallery({
     setSelected(m);
   };
 
+  const deleteMemory = (idToDelete) => {
+    const idStr = String(idToDelete);
+    setMemoryList((list) => list.filter((m) => String(m.id) !== idStr));
+    setDeletedIds((prev) => {
+      const next = new Set(prev);
+      next.add(idStr);
+      try {
+        window.localStorage.setItem(DELETED_IDS_KEY, JSON.stringify(Array.from(next)));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+    setMediaIndexById((prev) => {
+      const copy = { ...prev };
+      delete copy[idStr];
+      return copy;
+    });
+    if (selected && String(selected.id) === idStr) setSelected(null);
+    // Close any add modal to avoid adding into a deleted card.
+    if (addOpen) closeAdd();
+  };
+
   const downloadMemoryList = () => {
     // Downloads the current memories so you can paste them into `public/memories/memory_list.json`.
     const payload = JSON.stringify(memoryList, null, 2);
@@ -325,11 +374,12 @@ export default function MemoryGallery({
 
   useEffect(() => {
     try {
-      window.localStorage.setItem("memora_memory_list_v3", JSON.stringify(memoryList));
+      const filteredList = filterDeleted(memoryList, deletedIds);
+      window.localStorage.setItem(MEMORY_LIST_KEY, JSON.stringify(filteredList));
     } catch {
       // ignore
     }
-  }, [memoryList]);
+  }, [memoryList, deletedIds]);
 
   const parseMediaPaths = (raw) => {
     const parts = raw
@@ -546,6 +596,19 @@ export default function MemoryGallery({
               transitionDelay: `${(i % 4) * 80}ms`,
             }}
           >
+            <button
+              type="button"
+              className="del-btn"
+              style={styles.deleteBtn}
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteMemory(m.id);
+              }}
+              aria-label={`Delete memory ${m.title || ""}`}
+              title="Delete memory"
+            >
+              Del
+            </button>
             {(() => {
               const media = getMedia(m);
               const idx = mediaIndexById[String(m.id)] ?? 0;
@@ -693,7 +756,7 @@ export default function MemoryGallery({
                         try {
                           v.currentTime = 0;
                           // Autoplay is allowed because it's muted.
-                          v.play().catch(() => {});
+                          v.play().catch(() => { });
                         } catch {
                           // ignore
                         }
@@ -955,6 +1018,9 @@ export default function MemoryGallery({
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
         .card-hover:hover { transform: translateY(-6px) scale(1.02) !important; box-shadow: 0 24px 60px rgba(0,0,0,0.6) !important; }
+        .card-hover:hover img { transform: scale(1.06); }
+        .del-btn:hover { background: rgba(251,113,133,0.18) !important; border-color: rgba(251,113,133,0.38) !important; }
+        .del-btn:focus-visible { outline: 2px solid rgba(251,113,133,0.55); outline-offset: 2px; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
       `}</style>
     </div>
@@ -1108,6 +1174,23 @@ const styles = {
     fontFamily: "'DM Mono', monospace",
     letterSpacing: "0.06em",
     fontSize: "12px",
+  },
+  deleteBtn: {
+    position: "absolute",
+    top: "12px",
+    right: "12px",
+    zIndex: 6,
+    padding: "8px 10px",
+    borderRadius: "999px",
+    cursor: "pointer",
+    background: "rgba(6,6,14,0.55)",
+    border: "1px solid rgba(255,255,255,0.16)",
+    color: "rgba(255,255,255,0.92)",
+    fontFamily: "'DM Mono', monospace",
+    letterSpacing: "0.04em",
+    fontSize: "12px",
+    backdropFilter: "blur(14px)",
+    transition: "all 0.2s ease",
   },
   grid: {
     display: "grid",

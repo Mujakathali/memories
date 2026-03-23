@@ -1,4 +1,3 @@
-import React from "react";
 
 const tagColors = {
   Adventure: "#34d399",
@@ -67,9 +66,8 @@ export default function Home({ onOpenSection, onOpenBook }) {
                 <span
                   style={{
                     ...styles.cardGlow,
-                    background: `radial-gradient(circle at 30% 30%, ${
-                      tagColors[s] || "rgba(255,255,255,0.35)"
-                    }22 0%, transparent 60%)`,
+                    background: `radial-gradient(circle at 30% 30%, ${tagColors[s] || "rgba(255,255,255,0.35)"
+                      }22 0%, transparent 60%)`,
                   }}
                   aria-hidden="true"
                 />
@@ -92,6 +90,36 @@ export default function Home({ onOpenSection, onOpenBook }) {
           box-shadow: 0 28px 90px rgba(0,0,0,0.65) !important;
           border-color: rgba(255,255,255,0.22) !important;
         }
+        .home-card:focus-visible {
+          outline: 2px solid rgba(245,201,122,0.65);
+          outline-offset: 3px;
+        }
+        .home-card::before {
+          content: '';
+          position: absolute;
+          inset: -1px;
+          border-radius: 18px;
+          padding: 1px;
+          background: linear-gradient(120deg, rgba(245,201,122,0.00), rgba(245,201,122,0.28), rgba(96,165,250,0.18), rgba(251,113,133,0.22), rgba(245,201,122,0.00));
+          -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          opacity: 0.0;
+          transition: opacity 0.35s ease;
+          pointer-events: none;
+        }
+        .home-card:hover::before { opacity: 0.9; }
+        .home-card::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 18px;
+          background: radial-gradient(600px 180px at 30% 10%, rgba(255,255,255,0.10) 0%, transparent 60%);
+          opacity: 0;
+          transition: opacity 0.35s ease;
+          pointer-events: none;
+        }
+        .home-card:hover::after { opacity: 1; }
         @keyframes floatOrb {
           0% { transform: translate3d(0,0,0) scale(1); }
           50% { transform: translate3d(0,-18px,0) scale(1.04); }
