@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
-import MemoryGallery from "./MemoryGallery";
+import MemoryGallery, { getNextMemoryId } from "./MemoryGallery";
 
-test("shows locally stored memories for hidden chapters after reload", async () => {
+test("shows locally stored memories for all chapters after reload", async () => {
   const key = "memora_memory_list_v3";
   const sample = [
     {
@@ -29,4 +29,10 @@ test("shows locally stored memories for hidden chapters after reload", async () 
   );
 
   expect(await screen.findByText("Test Memory")).toBeInTheDocument();
+});
+
+test("does not reuse deleted ids for newly added memories", () => {
+  const list = [{ id: 1 }, { id: 3 }, { id: "8" }];
+  const deleted = new Set(["2", "4", "5", "6", "7"]);
+  expect(getNextMemoryId(list, deleted)).toBe(9);
 });

@@ -10,26 +10,37 @@
     "media": [
       {
         "kind": "image",
-        "src": "/media/photos/one.jpeg"
+        "src": "/media\\photos\\one.jpeg"
       }
     ]
   },
   {
-    "id": 3,
+    "id": 5,
     "tag": "Love",
-    "title": "love",
-    "date": "sept24",
-    "note": "Mayakite dii… anaiku enna kanula mai potu\nthat was the moment I fell for you.",
+    "title": "Untitled",
+    "date": "—",
+    "note": "",
     "span": "normal",
     "type": "media",
     "media": [
       {
         "kind": "image",
-        "src": "/media/photos/w1.jpeg"
-      },
+        "src": "/media/photos/l1.png"
+      }
+    ]
+  },
+  {
+    "id": 6,
+    "tag": "Love",
+    "title": "Untitled",
+    "date": "—",
+    "note": "",
+    "span": "tall",
+    "type": "media",
+    "media": [
       {
         "kind": "image",
-        "src": "/media/photos/w2.jpeg"
+        "src": "/media/photos/l2.png"
       }
     ]
   }

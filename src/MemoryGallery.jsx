@@ -4,6 +4,7 @@ const seedMemories = [];
 
 const MEMORY_LIST_KEY = "memora_memory_list_v3";
 const DELETED_IDS_KEY = "memora_deleted_ids_v1";
+const WINDOW_STATE_PREFIX = "memora_state_v1:";
 
 const tags = [
   "All",
@@ -26,21 +27,37 @@ const tagColors = {
   Book: "#f5c97a",
 };
 
-const REMOVE_TAGS = new Set();
-
 const normalizeMemoryList = (list) => {
   if (!Array.isArray(list)) return [];
-  return list.filter((m) => {
-    const tag = (m?.tag ?? "").toString().trim();
-    return !REMOVE_TAGS.has(tag);
-  });
+  return list;
+};
+
+const readWindowState = () => {
+  try {
+    const raw = String(window.name || "");
+    if (!raw.startsWith(WINDOW_STATE_PREFIX)) return {};
+    const parsed = JSON.parse(raw.slice(WINDOW_STATE_PREFIX.length));
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+};
+
+const writeWindowState = (patch) => {
+  try {
+    const current = readWindowState();
+    const next = { ...current, ...patch };
+    window.name = `${WINDOW_STATE_PREFIX}${JSON.stringify(next)}`;
+  } catch {
+    // ignore
+  }
 };
 
 const readDeletedIds = () => {
   try {
     const raw = window.localStorage.getItem(DELETED_IDS_KEY);
-    if (!raw) return new Set();
-    const parsed = JSON.parse(raw);
+    const parsed = raw ? JSON.parse(raw) : readWindowState().deletedIds;
     if (!Array.isArray(parsed)) return new Set();
     return new Set(parsed.map((x) => String(x)));
   } catch {
@@ -51,6 +68,36 @@ const readDeletedIds = () => {
 const filterDeleted = (list, deletedIds) => {
   if (!Array.isArray(list) || !deletedIds || deletedIds.size === 0) return list;
   return list.filter((m) => !deletedIds.has(String(m?.id ?? "")));
+};
+
+export const getNextMemoryId = (list, deletedIds) => {
+  const used = new Set();
+  if (Array.isArray(list)) {
+    for (const item of list) {
+      const n = Number(item?.id);
+      if (Number.isFinite(n) && n > 0) used.add(Math.floor(n));
+    }
+  }
+  if (deletedIds && typeof deletedIds.forEach === "function") {
+    deletedIds.forEach((value) => {
+      const n = Number(value);
+      if (Number.isFinite(n) && n > 0) used.add(Math.floor(n));
+    });
+  }
+  let candidate = 1;
+  while (used.has(candidate)) candidate += 1;
+  return candidate;
+};
+
+const readMemoryList = () => {
+  try {
+    const raw = window.localStorage.getItem(MEMORY_LIST_KEY);
+    const parsed = raw ? JSON.parse(raw) : readWindowState().memoryList;
+    const arr = Array.isArray(parsed) ? parsed : seedMemories;
+    return filterDeleted(normalizeMemoryList(arr), readDeletedIds());
+  } catch {
+    return filterDeleted(normalizeMemoryList(seedMemories), readDeletedIds());
+  }
 };
 
 export default function MemoryGallery({
@@ -64,15 +111,8 @@ export default function MemoryGallery({
     return readDeletedIds();
   });
   const [memoryList, setMemoryList] = useState(() => {
-    try {
-      const raw = window.localStorage.getItem(MEMORY_LIST_KEY);
-      if (!raw) return seedMemories;
-      const parsed = JSON.parse(raw);
-      const arr = Array.isArray(parsed) ? parsed : seedMemories;
-      return filterDeleted(normalizeMemoryList(arr), readDeletedIds());
-    } catch {
-      return filterDeleted(normalizeMemoryList(seedMemories), readDeletedIds());
-    }
+    if (typeof window === "undefined") return seedMemories;
+    return readMemoryList();
   });
   const [active, setActive] = useState(activeTag || "All");
   const [selected, setSelected] = useState(null);
@@ -95,14 +135,11 @@ export default function MemoryGallery({
   const [addSpan, setAddSpan] = useState("normal"); // normal | tall | wide
   const [addColor, setAddColor] = useState(tagColors.Love);
   const addTagOptions = useMemo(
-    () => tags.filter((t) => t !== "All" && t !== "Book" && !REMOVE_TAGS.has(t)),
+    () => tags.filter((t) => t !== "All" && t !== "Book"),
     []
   );
 
-  const nextId = useMemo(() => {
-    const maxId = memoryList.reduce((mx, m) => Math.max(mx, Number(m.id) || 0), 0);
-    return maxId + 1;
-  }, [memoryList]);
+  const nextId = useMemo(() => getNextMemoryId(memoryList, deletedIds), [memoryList, deletedIds]);
 
   useEffect(() => {
     const t = setTimeout(() => setHeaderVisible(true), 100);
@@ -110,7 +147,7 @@ export default function MemoryGallery({
   }, []);
 
   // Load repo-persisted memories (works on Vercel).
-  // If `public/memories/memory_list.json` is empty, we keep localStorage.
+  // Always prioritize localStorage over repo JSON for user-added content
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -124,8 +161,10 @@ export default function MemoryGallery({
           const normalized = filterDeleted(normalizeMemoryList(data), deletedNow);
           setMemoryList((current) => {
             const hasLocal = Array.isArray(current) && current.length > 0;
+            // Always use localStorage if it has content, otherwise use repo data
             if (!hasLocal) return normalized;
 
+            // Merge repo data with localStorage, prioritizing localStorage
             const byId = new Map();
             for (const m of normalized) byId.set(String(m?.id ?? ""), m);
             for (const m of current) byId.set(String(m?.id ?? ""), m);
@@ -318,7 +357,9 @@ export default function MemoryGallery({
       const next = new Set(prev);
       next.add(idStr);
       try {
-        window.localStorage.setItem(DELETED_IDS_KEY, JSON.stringify(Array.from(next)));
+        const deleted = Array.from(next);
+        window.localStorage.setItem(DELETED_IDS_KEY, JSON.stringify(deleted));
+        writeWindowState({ deletedIds: deleted });
       } catch {
         // ignore
       }
@@ -371,7 +412,6 @@ export default function MemoryGallery({
   };
 
   const openAddForTag = (t) => {
-    if (REMOVE_TAGS.has(t)) return;
     setAddTargetId(null);
     setAddTag(t);
     setAddType(t === "Thoughts" ? "text" : "media");
@@ -397,6 +437,10 @@ export default function MemoryGallery({
     try {
       const filteredList = filterDeleted(memoryList, deletedIds);
       window.localStorage.setItem(MEMORY_LIST_KEY, JSON.stringify(filteredList));
+      writeWindowState({
+        memoryList: filteredList,
+        deletedIds: Array.from(deletedIds),
+      });
     } catch {
       // ignore
     }
@@ -438,7 +482,6 @@ export default function MemoryGallery({
   }, [addOpen, addType, addMediaPaths, addCountTouched, addCount]);
 
   const submitAdd = () => {
-    if (REMOVE_TAGS.has(addTag)) return;
     const base = {
       id: nextId,
       tag: addTag,
@@ -841,7 +884,7 @@ export default function MemoryGallery({
         </div>
       )}
 
-      {active !== "Book" && !REMOVE_TAGS.has(active) && !selected && (
+      {active !== "Book" && !selected && (
         <button
           type="button"
           onClick={() => openAddForTag(active === "All" ? "Adventure" : active)}
