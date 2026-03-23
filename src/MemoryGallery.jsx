@@ -96,8 +96,10 @@ export default function MemoryGallery({
         if (!res.ok) return;
         const data = await res.json();
         if (cancelled) return;
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           const normalized = normalizeMemoryList(data);
+          // Always overwrite app state when the repo file loads successfully,
+          // so a new Vercel deploy doesn't get stuck on old localStorage data.
           setMemoryList(normalized);
           try {
             window.localStorage.setItem("memora_memory_list_v3", JSON.stringify(normalized));
