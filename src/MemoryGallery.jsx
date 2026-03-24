@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-
-const seedMemories = [];
+import seedMemories from "./memories/memory_list.json";
 
 const MEMORY_LIST_KEY = "memora_memory_list_v3";
 const DELETED_IDS_KEY = "memora_deleted_ids_v1";
