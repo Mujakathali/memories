@@ -1,46 +1,155 @@
 [
   {
-    "id": 1,
+    "id": 7,
     "tag": "Love",
-    "title": "possesive girl",
-    "date": "2nd sem",
-    "note": "You were jealous, angry, possessive… but in every emotion, I saw how deeply you loved me.I never forgot those video call nights with you!",
+    "title": "Possesive girl",
+    "date": "—",
+    "note": "When I loved someone else, you showed me what real love looks like anger, possessiveness, and a heart that refused to lose me.",
     "span": "tall",
     "type": "media",
     "media": [
       {
         "kind": "image",
-        "src": "/media\\photos\\one.jpeg"
+        "src": "/media/photos/one.jpeg"
       }
     ]
   },
   {
-    "id": 5,
+    "id": 8,
     "tag": "Love",
-    "title": "Untitled",
+    "title": "Born as Art",
     "date": "—",
-    "note": "",
+    "note": "You don’t need AI to create something beautiful… you’re already a masterpiece.",
     "span": "normal",
     "type": "media",
     "media": [
       {
         "kind": "image",
-        "src": "/media/photos/l1.png"
+        "src": "/media/photos/bg.jpeg"
       }
     ]
   },
   {
-    "id": 6,
+    "id": 9,
     "tag": "Love",
-    "title": "Untitled",
+    "title": "A Beautiful Delusion",
     "date": "—",
-    "note": "",
+    "note": "Let me stay in my delulu world where we chose each other every single day and never let go, where love didn’t end but only grew stronger…\nbecause that’s the only place where my heart still feels complete.",
     "span": "tall",
     "type": "media",
     "media": [
       {
         "kind": "image",
+        "src": "/media/photos/l1.png"
+      },
+      {
+        "kind": "image",
         "src": "/media/photos/l2.png"
+      }
+    ]
+  },
+  {
+    "id": 10,
+    "tag": "Love",
+    "title": "The Moment I fell!!",
+    "date": "—",
+    "note": "The moment you made me fall in love with you… mayakite dii, anaiku enna kanula mai potu . I don’t know what you did, but from that second, I was never the same.",
+    "span": "tall",
+    "type": "media",
+    "media": [
+      {
+        "kind": "image",
+        "src": "/media/photos/w1.jpeg"
+      },
+      {
+        "kind": "image",
+        "src": "/media/photos/w2.jpeg"
+      }
+    ]
+  },
+  {
+    "id": 11,
+    "tag": "Coimbatore Days",
+    "title": "First Outing in CBE",
+    "date": "—",
+    "note": "After 6 months, our first meet didn’t feel like a beginning, it felt like coming back home. That first moment when I placed my hand on your shoulder, there was comfort, happiness, and everything we missed in silence. From capturing little snaps to send to Niro, to living those moments for ourselves, every second felt unreal. And then… our first kiss not just a kiss, but all the love, distance, and emotions finally finding their way back to each other.",
+    "span": "tall",
+    "type": "media",
+    "media": [
+      {
+        "kind": "image",
+        "src": "/media/photos/m1.jpeg"
+      },
+      {
+        "kind": "image",
+        "src": "/media/photos/m2.jpeg"
+      },
+      {
+        "kind": "video",
+        "src": "/media/videos/m3.mp4"
+      }
+    ]
+  },
+  {
+    "id": 12,
+    "tag": "Coimbatore Days",
+    "title": "My princess birthday",
+    "date": "sept2023",
+    "note": "My princess’s birthday… today just felt different in the most beautiful way, like everything around me was softer, happier, and full of warmth, all because you exist. It’s not just another day on the calendar, it’s the day someone so special came into this world and unknowingly made mine so much better. Every smile of yours, every little moment with you, it all means more than I can ever put into words. I don’t know how to explain it, but today felt so good… maybe because it’s your day, the day my heart is quietly grateful for you more than ever.",
+    "span": "tall",
+    "type": "media",
+    "media": [
+      {
+        "kind": "image",
+        "src": "/media/photos/b1.jpeg"
+      },
+      {
+        "kind": "image",
+        "src": "/media/photos/b2.jpeg"
+      },
+      {
+        "kind": "video",
+        "src": "/media/videos/b2.mp4"
+      },
+      {
+        "kind": "video",
+        "src": "/media/videos/b3.mp4"
+      },
+      {
+        "kind": "video",
+        "src": "/media/videos/b4.mp4"
+      },
+      {
+        "kind": "video",
+        "src": "/media/videos/b5.mp4"
+      },
+      {
+        "kind": "video",
+        "src": "/media/videos/b6.mp4"
+      },
+      {
+        "kind": "video",
+        "src": "/media/videos/b7.mp4"
+      },
+      {
+        "kind": "video",
+        "src": "/media/videos/b8.mp4"
+      },
+      {
+        "kind": "video",
+        "src": "/media/videos/b9.mp4"
+      },
+      {
+        "kind": "video",
+        "src": "/media/videos/b10.mp4"
+      },
+      {
+        "kind": "video",
+        "src": "/media/videos/b11.mp4"
+      },
+      {
+        "kind": "video",
+        "src": "/media/videos/b12.mp4"
       }
     ]
   }
