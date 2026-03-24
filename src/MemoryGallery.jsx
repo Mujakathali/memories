@@ -90,9 +90,9 @@ export const getNextMemoryId = (list, deletedIds) => {
 
 const readMemoryList = () => {
   try {
-    const raw = window.localStorage.getItem(MEMORY_LIST_KEY);
-    const parsed = raw ? JSON.parse(raw) : readWindowState().memoryList;
-    const arr = Array.isArray(parsed) ? parsed : seedMemories;
+    // Always use the seedMemories from the JSON file as the source of truth.
+    const arr = seedMemories;
+    // Filter out any memories that the user has deleted on their client.
     return filterDeleted(normalizeMemoryList(arr), readDeletedIds());
   } catch {
     return filterDeleted(normalizeMemoryList(seedMemories), readDeletedIds());
