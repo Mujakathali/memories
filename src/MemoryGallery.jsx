@@ -161,14 +161,8 @@ export default function MemoryGallery({
           const normalized = filterDeleted(normalizeMemoryList(data), deletedNow);
           setMemoryList((current) => {
             const hasLocal = Array.isArray(current) && current.length > 0;
-            // Always use localStorage if it has content, otherwise use repo data
             if (!hasLocal) return normalized;
-
-            // Merge repo data with localStorage, prioritizing localStorage
-            const byId = new Map();
-            for (const m of normalized) byId.set(String(m?.id ?? ""), m);
-            for (const m of current) byId.set(String(m?.id ?? ""), m);
-            return filterDeleted(normalizeMemoryList(Array.from(byId.values())), deletedNow);
+            return filterDeleted(normalizeMemoryList(current), deletedNow);
           });
         }
       } catch {
