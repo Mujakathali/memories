@@ -4,21 +4,53 @@ import Home from "./Home";
 import MemoryGallery from "./MemoryGallery";
 import Workdays from "./Workdays";
 
+const OPEN_DATE = new Date(2026, 8, 24, 0, 0, 0, 0); // 24/09/2026 (local time)
+
+const getCountdownParts = () => {
+  const now = Date.now();
+  const ms = Math.max(0, OPEN_DATE.getTime() - now);
+
+  const totalSeconds = Math.floor(ms / 1000);
+  const days = Math.floor(totalSeconds / (24 * 60 * 60));
+  const hours = Math.floor((totalSeconds % (24 * 60 * 60)) / (60 * 60));
+  const minutes = Math.floor((totalSeconds % (60 * 60)) / 60);
+  const seconds = totalSeconds % 60;
+
+  return { ms, days, hours, minutes, seconds };
+};
+
 function App() {
   const [authed, setAuthed] = useState(false);
   const [view, setView] = useState("home"); // home | gallery | book | workdays
   const [section, setSection] = useState("All");
-  const [pw, setPw] = useState("");
-  const [shake, setShake] = useState(false);
   const [bookGateOpen, setBookGateOpen] = useState(false);
   const [bookPin, setBookPin] = useState("");
   const [bookShake, setBookShake] = useState(false);
+  const [countdown, setCountdown] = useState(() => getCountdownParts());
+
+  useEffect(() => {
+    if (authed) return undefined;
+    const check = () => {
+      if (Date.now() >= OPEN_DATE.getTime()) {
+        setAuthed(true);
+        setView("home");
+      }
+    };
+    check();
+    const t = window.setInterval(check, 60 * 1000);
+    return () => window.clearInterval(t);
+  }, [authed]);
+
+  useEffect(() => {
+    if (authed) return undefined;
+    const t = window.setInterval(() => setCountdown(getCountdownParts()), 1000);
+    return () => window.clearInterval(t);
+  }, [authed]);
 
   useEffect(() => {
     if (!authed) return undefined;
     const t = window.setTimeout(() => {
       setAuthed(false);
-      setPw("");
       setView("home");
       setSection("All");
       setBookGateOpen(false);
@@ -26,17 +58,6 @@ function App() {
     }, 30 * 60 * 1000);
     return () => window.clearTimeout(t);
   }, [authed]);
-
-  const submit = () => {
-    if (pw === "kanimuja") {
-      setAuthed(true);
-      setView("home");
-      return;
-    }
-    setPw("");
-    setShake(true);
-    window.setTimeout(() => setShake(false), 520);
-  };
 
   const openBookGate = () => {
     setBookPin("");
@@ -69,32 +90,40 @@ function App() {
         <div style={styles.noise} />
 
         <div style={styles.center}>
-          <div style={{ ...styles.card, ...(shake ? styles.shake : {}) }}>
+          <div style={styles.card}>
             <div style={styles.cardTop}>
               <span style={styles.star}>✦</span>
               <span style={styles.brand}>Memora</span>
             </div>
             <div style={styles.title}>Love, locked in time</div>
-            <div style={styles.sub}>Enter the password to open your memories</div>
-
-            <div style={styles.inputWrap}>
-              <span style={styles.icon}>♥</span>
-              <input
-                value={pw}
-                onChange={(e) => setPw(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") submit();
-                }}
-                placeholder="Password…"
-                style={styles.input}
-                autoFocus
-                type="password"
-              />
+            <div style={styles.sub}>
+              {countdown.ms <= 0 ? (
+                <span style={styles.countdownFinal}>Open on 24/09/2026… on your bday</span>
+              ) : (
+                <div style={styles.countdownWrap} aria-label="Countdown">
+                  <div style={styles.countdownItem}>
+                    <div style={styles.countdownNum}>{countdown.days}</div>
+                    <div style={styles.countdownLab}>Days</div>
+                  </div>
+                  <div style={styles.countdownSep}>:</div>
+                  <div style={styles.countdownItem}>
+                    <div style={styles.countdownNum}>{String(countdown.hours).padStart(2, "0")}</div>
+                    <div style={styles.countdownLab}>Hours</div>
+                  </div>
+                  <div style={styles.countdownSep}>:</div>
+                  <div style={styles.countdownItem}>
+                    <div style={styles.countdownNum}>{String(countdown.minutes).padStart(2, "0")}</div>
+                    <div style={styles.countdownLab}>Mins</div>
+                  </div>
+                  <div style={styles.countdownSep}>:</div>
+                  <div style={styles.countdownItem}>
+                    <div style={styles.countdownNum}>{String(countdown.seconds).padStart(2, "0")}</div>
+                    <div style={styles.countdownLab}>Secs</div>
+                  </div>
+                </div>
+              )}
             </div>
-            <button type="button" onClick={submit} style={styles.btn}>
-              Unlock
-            </button>
-            <div style={styles.hint}>Password: kanimuja</div>
+            <div style={styles.lockHint}>It will open on your bday drum uh</div>
           </div>
         </div>
 
@@ -102,14 +131,6 @@ function App() {
           @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=DM+Mono:wght@300;400&display=swap');
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body { background: #06060e; }
-          @keyframes shake {
-            0% { transform: translateX(0); }
-            18% { transform: translateX(-10px); }
-            36% { transform: translateX(10px); }
-            54% { transform: translateX(-8px); }
-            72% { transform: translateX(8px); }
-            100% { transform: translateX(0); }
-          }
         `}</style>
       </div>
     );
@@ -261,9 +282,6 @@ const styles = {
     backdropFilter: "blur(18px)",
     boxShadow: "0 40px 120px rgba(0,0,0,0.62)",
   },
-  shake: {
-    animation: "shake 520ms cubic-bezier(0.16, 1, 0.3, 1)",
-  },
   cardTop: {
     display: "flex",
     alignItems: "center",
@@ -291,44 +309,55 @@ const styles = {
     fontSize: "12px",
     marginBottom: "18px",
   },
-  inputWrap: {
+  countdownWrap: {
     display: "flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: "10px",
-    padding: "12px 14px",
+    padding: "10px 12px",
     borderRadius: "16px",
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.12)",
-    marginBottom: "12px",
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.10)",
+    backdropFilter: "blur(16px)",
+    boxShadow: "0 18px 60px rgba(0,0,0,0.35)",
   },
-  icon: { color: "rgba(255,255,255,0.6)" },
-  input: {
-    width: "100%",
-    background: "transparent",
-    border: "none",
-    outline: "none",
-    color: "#fff",
-    fontFamily: "'DM Mono', monospace",
-    fontSize: "13px",
+  countdownItem: {
+    minWidth: "62px",
+    textAlign: "center",
+  },
+  countdownNum: {
+    fontSize: "18px",
+    letterSpacing: "0.14em",
+    color: "rgba(255,255,255,0.92)",
+  },
+  countdownLab: {
+    marginTop: "6px",
+    fontSize: "10px",
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
+    color: "rgba(255,255,255,0.38)",
+  },
+  countdownSep: {
+    color: "rgba(245,201,122,0.65)",
+    fontSize: "18px",
+    opacity: 0.9,
+  },
+  countdownFinal: {
+    display: "block",
+    textAlign: "center",
+    padding: "10px 12px",
+    borderRadius: "16px",
+    background: "rgba(245,201,122,0.10)",
+    border: "1px solid rgba(245,201,122,0.22)",
+    color: "rgba(255,255,255,0.92)",
     letterSpacing: "0.06em",
   },
-  btn: {
-    width: "100%",
-    padding: "12px 14px",
-    borderRadius: "16px",
-    border: "1px solid rgba(245,201,122,0.22)",
-    background: "rgba(245,201,122,0.16)",
-    color: "#fff",
-    cursor: "pointer",
-    fontFamily: "'DM Mono', monospace",
-    letterSpacing: "0.08em",
-  },
-  hint: {
-    marginTop: "12px",
-    fontSize: "10px",
-    letterSpacing: "0.1em",
-    color: "rgba(255,255,255,0.22)",
+  lockHint: {
+    marginTop: "10px",
     textAlign: "center",
+    fontSize: "10px",
+    letterSpacing: "0.12em",
+    color: "rgba(255,255,255,0.30)",
   },
   gateOverlay: {
     position: "fixed",
